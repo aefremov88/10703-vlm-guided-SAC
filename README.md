@@ -1,12 +1,12 @@
 # VLM Critic Workbench
 
-This repo is a **small workbench** to:
+This repo is a **workbench for 10703 "Deep Reinforcement Learngin course** at Carnegie Mellon University. It's purpose is:
 
 - pick and compare **vision-language models (VLMs)** as critics
 - tune the **pair-generation scripts** (what images we show, how we bucket difficulty)
-- and choose a good **k / “nudge” design** for a VLM-enhanced SAC / PPO workflow.
+- choose a good **k / “nudge” design** for a VLM-enhanced SAC workflow
+- run online SAC experiments on FetchReach with **ground-truth or VLM-based nudge**
 
-Everything here is **offline**: we sample rollouts once, then build and analyze pair datasets to understand when a VLM can reliably say “state A is better than state B”.
 
 ------
 
@@ -21,8 +21,11 @@ Everything here is **offline**: we sample rollouts once, then build and analyze 
    - by Δd buckets → “how accuracy changes with how different the states are”
    - by k buckets → “how accuracy changes with temporal separation”
 4. Use these results to:
-   - choose a VLM + prompt format,
-   - choose k and weighting for the VLM “nudge” in SAC.
+   - choose a VLM + prompt format
+   - choose k and weighting for the VLM “nudge” in SAC
+5. **Run online SAC training** on `FetchReachDense-v4`:
+   - compare sparse + ground-truth nudge vs. sparse + VLM nudge
+   - log SAC runs (models + TensorBoard traces) for analysis (e.g. under `runs/`)
 
 ------
 
@@ -155,6 +158,21 @@ Everything here is **offline**: we sample rollouts once, then build and analyze 
     - `plots/vlm_acc_by_k.png`: bar chart of accuracy per k-range
     - Visual exports into `pairs/by_k/` of pictures of both states, distance to target in both states, Δd, ground truth label and VLM-generated label sorted by Δd
 
+### Online RL training (SAC + VLM nudge)
+
+- **`training_pipeline.py`**
+  - **Purpose:** run online SAC training on `FetchReachDense-v4` with sparse reward plus:
+    - ground-truth nudge based on environment distance, or
+    - VLM-based nudge queried through `vlm_client.py`
+  - Uses `env_utils.make_env()` for environment and camera setup
+  - **Key arguments to tune**
+    - `--nudge-gamma` – magnitude of the nudge reward
+    - `--repeat` – action repeat K (how many physics steps per RL step)
+    - `--success-radius`, `--step-penalty`, `--success-reward`, `--max-steps`
+    - `--use-vlm` – switch between ground-truth and VLM-based nudge
+  - Saves SAC checkpoints and logging outputs into run-specific subdirectories
+    (e.g. inside a top-level `runs/` folder) for later inspection in TensorBoard
+
 ------
 
 ### Folders
@@ -178,3 +196,7 @@ Everything here is **offline**: we sample rollouts once, then build and analyze 
   - Text log files with console outputs from long runs, e.g.:
     - `logs/eval_vlm_by_dist.log`
     - `logs/eval_vlm_by_k.log`
+- **`runs/`**
+  - (Optional) RL training runs from `training_pipeline.py`, e.g.:
+    - SAC checkpoints for different nudge settings,
+    - TensorBoard logs to compare VLM vs ground-truth vs sparse baselines.

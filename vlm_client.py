@@ -9,6 +9,7 @@ import numpy as np
 import requests
 from PIL import Image
 from dotenv import load_dotenv
+import time
 
 load_dotenv()
 
@@ -19,7 +20,7 @@ if not OPENROUTER_API_KEY:
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # VLM model is configurable via env; default to a compact Qwen VLM.
-VLM_MODEL = os.getenv("VLM_MODEL_NAME", "qwen/qwen2.5-vl-72b-instruct")
+VLM_MODEL = os.getenv("VLM_MODEL_NAME", "qwen/qwen2.5-vl-32b-instruct")
 
 
 SYSTEM_PROMPT = """
@@ -109,6 +110,11 @@ def vlm_compare(
         0  if the VLM judges A better,
         1  if the VLM judges B better,
         None if the VLM replies "unknown" or the output cannot be parsed.
+
+    On any HTTP / network error or non-200 response:
+        - log the error
+        - sleep 1 second (cooldown)
+        - return 0 as a default.
     """
     if img_s.ndim != 3 or img_s_next.ndim != 3:
         raise ValueError("Images should be HxWx3 arrays")
@@ -127,7 +133,6 @@ def vlm_compare(
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
-        # optional but recommended metadata
         "HTTP-Referer": "https://github.com/anton-final-project",
         "X-Title": "DRL-VLM-Project",
     }
@@ -135,25 +140,18 @@ def vlm_compare(
     body = {
         "model": VLM_MODEL,
         "messages": [
-            {
-                "role": "system",
-                "content": SYSTEM_PROMPT,
-            },
+            {"role": "system", "content": SYSTEM_PROMPT},
             {
                 "role": "user",
                 "content": [
                     {"type": "text", "text": user_text},
                     {
                         "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/png;base64,{img_s_b64}"
-                        },
+                        "image_url": {"url": f"data:image/png;base64,{img_s_b64}"},
                     },
                     {
                         "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/png;base64,{img_snext_b64}"
-                        },
+                        "image_url": {"url": f"data:image/png;base64,{img_snext_b64}"},
                     },
                 ],
             },
@@ -162,15 +160,23 @@ def vlm_compare(
         "temperature": 0.0,
     }
 
-    # print("[vlm_compare] Using model:", VLM_MODEL)
-
-    resp = requests.post(
-        OPENROUTER_URL, json=body, headers=headers, timeout=60
-    )
+    try:
+        resp = requests.post(
+            OPENROUTER_URL, json=body, headers=headers, timeout=60
+        )
+    except requests.exceptions.RequestException as e:
+        print(f"[VLM] request exception: {e}; sleeping 1s and returning 0")
+        time.sleep(1.0)
+        return 0
 
     if resp.status_code != 200:
-        print("VLM error:", resp.status_code, resp.text[:500])
-        resp.raise_for_status()
+        print(
+            "[VLM] HTTP error:",
+            resp.status_code,
+            resp.text[:200].replace("\n", " "),
+        )
+        time.sleep(1.0)
+        return 0
 
     data = resp.json()
     content = data["choices"][0]["message"]["content"]
