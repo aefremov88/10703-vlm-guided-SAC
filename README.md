@@ -1,6 +1,6 @@
 # VLM Critic Workbench
 
-This repo is a **workbench for 10703 "Deep Reinforcement Learngin course** at Carnegie Mellon University. It's purpose is:
+This repo is a **workbench for 10703 "Deep Reinforcement Learning" course** at Carnegie Mellon University. It's purpose is:
 
 - pick and compare **vision-language models (VLMs)** as critics
 - tune the **pair-generation scripts** (what images we show, how we bucket difficulty)
